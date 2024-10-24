@@ -1,5 +1,8 @@
 /**
  * Interface for pagination parameters
+ * @property page - Current page number
+ * @property limit - Number of items per page
+ * @property totalItems - Total number of items
  */
 export interface PaginationParams {
   page?: number
@@ -9,6 +12,17 @@ export interface PaginationParams {
 
 /**
  * Interface for pagination result
+ * @property currentPage - Current page number
+ * @property totalPages - Total number of pages
+ * @property pageSize - Number of items per page
+ * @property totalItems - Total number of items
+ * @property hasNextPage - Whether there is a next page
+ * @property hasPreviousPage - Whether there is a previous page
+ * @property nextPage - Next page number
+ * @property previousPage - Previous page number
+ * @property offset - Offset of the current page
+ * @property items.start - Start index of items on the current page
+ * @property items.end - End index of items on the current page
  */
 export interface PaginationResult {
   currentPage: number
@@ -28,6 +42,16 @@ export interface PaginationResult {
 
 /**
  * Pagination utility class for handling pagination logic in NextJS applications
+ * @singleton pagination - Singleton instance of PaginationService
+ * @method getInstance - Get the singleton instance of PaginationService
+ * @method calculate - Calculate pagination details based on provided parameters
+ * @method parseSearchParams - Parse pagination parameters from URL search params
+ * @method generateMetaTags - Generate pagination meta tags for SEO
+ * @example
+ * const pagination = PaginationService.getInstance()
+ * const params = { page: 1, limit: 10, totalItems: 100 }
+ * const result = pagination.calculate(params)
+ * console.log(result)
  */
 class PaginationService {
   private static instance: PaginationService
@@ -71,6 +95,8 @@ class PaginationService {
 
   /**
    * Calculate pagination details based on provided parameters
+   * @param params - Pagination parameters
+   * @returns PaginationResult
    */
   public calculate(params: PaginationParams): PaginationResult {
     this.validateParams(params)
