@@ -1,7 +1,7 @@
 /**
  * Interface for pagination parameters
  */
-interface PaginationParams {
+export interface PaginationParams {
   page?: number
   limit?: number
   totalItems: number
@@ -10,7 +10,7 @@ interface PaginationParams {
 /**
  * Interface for pagination result
  */
-interface PaginationResult {
+export interface PaginationResult {
   currentPage: number
   totalPages: number
   pageSize: number
@@ -29,18 +29,53 @@ interface PaginationResult {
 /**
  * Pagination utility class for handling pagination logic in NextJS applications
  */
-export class Pagination {
-  private static readonly DEFAULT_PAGE = 1
-  private static readonly DEFAULT_LIMIT = 10
-  private static readonly MAX_LIMIT = 100
+class PaginationService {
+  private static instance: PaginationService
+  private readonly DEFAULT_PAGE = 1
+  private readonly DEFAULT_LIMIT = 10
+  private readonly MAX_LIMIT = 100
+  private readonly MIN_PAGE = 1
+
+  private constructor() {
+    // Private constructor to prevent direct construction calls with 'new'
+  }
+
+  /**
+   * Get the singleton instance of PaginationService
+   */
+  public static getInstance(): PaginationService {
+    if (!PaginationService.instance) {
+      PaginationService.instance = new PaginationService()
+    }
+    return PaginationService.instance
+  }
+
+  /**
+   * Validate pagination parameters
+   * @throws Error if parameters are invalid
+   */
+  private validateParams(params: PaginationParams): void {
+    if (params.totalItems < 0) {
+      throw new Error('Total items cannot be negative')
+    }
+    if (params.page !== undefined && params.page < this.MIN_PAGE) {
+      throw new Error('Page number cannot be less than 1')
+    }
+    if (
+      params.limit !== undefined &&
+      (params.limit < 1 || params.limit > this.MAX_LIMIT)
+    ) {
+      throw new Error(`Limit must be between 1 and ${this.MAX_LIMIT}`)
+    }
+  }
 
   /**
    * Calculate pagination details based on provided parameters
-   * @param params PaginationParams object containing page, limit, and totalItems
-   * @returns PaginationResult object with calculated pagination details
    */
-  public static calculate(params: PaginationParams): PaginationResult {
-    const page = Math.max(params.page ?? this.DEFAULT_PAGE, 1)
+  public calculate(params: PaginationParams): PaginationResult {
+    this.validateParams(params)
+
+    const page = Math.max(params.page ?? this.DEFAULT_PAGE, this.MIN_PAGE)
     const limit = Math.min(
       Math.max(params.limit ?? this.DEFAULT_LIMIT, 1),
       this.MAX_LIMIT
@@ -48,7 +83,6 @@ export class Pagination {
     const totalItems = Math.max(params.totalItems, 0)
     const totalPages = Math.ceil(totalItems / limit)
 
-    // Ensure page doesn't exceed total pages
     const currentPage = Math.min(page, Math.max(totalPages, 1))
     const offset = (currentPage - 1) * limit
 
@@ -73,94 +107,52 @@ export class Pagination {
   }
 
   /**
-   * Generate an array of page numbers for pagination UI
-   * @param currentPage Current page number
-   * @param totalPages Total number of pages
-   * @param maxVisible Maximum number of visible page numbers
-   * @returns Array of page numbers to display
-   */
-  public static getPageNumbers(
-    currentPage: number,
-    totalPages: number,
-    maxVisible: number = 5
-  ): (number | string)[] {
-    if (totalPages <= maxVisible) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1)
-    }
-
-    const halfVisible = Math.floor(maxVisible / 2)
-    const pages: (number | string)[] = []
-
-    // Always show first page
-    pages.push(1)
-
-    // Calculate start and end of visible pages
-    let start = Math.max(currentPage - halfVisible, 2)
-    let end = Math.min(currentPage + halfVisible, totalPages - 1)
-
-    // Adjust if we're near the start
-    if (start <= 2) {
-      end = Math.min(maxVisible, totalPages - 1)
-      start = 2
-    }
-
-    // Adjust if we're near the end
-    if (end >= totalPages - 1) {
-      start = Math.max(2, totalPages - maxVisible + 1)
-      end = totalPages - 1
-    }
-
-    // Add ellipsis after first page if needed
-    if (start > 2) {
-      pages.push('...')
-    }
-
-    // Add visible page numbers
-    for (let i = start; i <= end; i++) {
-      pages.push(i)
-    }
-
-    // Add ellipsis before last page if needed
-    if (end < totalPages - 1) {
-      pages.push('...')
-    }
-
-    // Always show last page
-    if (totalPages > 1) {
-      pages.push(totalPages)
-    }
-
-    return pages
-  }
-
-  /**
    * Parse pagination parameters from URL search params
-   * @param searchParams URLSearchParams object
-   * @returns Object containing page and limit
    */
-  public static parseSearchParams(searchParams: URLSearchParams): {
+  public parseSearchParams(searchParams: URLSearchParams): {
     page: number
     limit: number
   } {
-    const page = Math.max(Number(searchParams.get('page')) || this.DEFAULT_PAGE, 1)
-    const limit = Math.min(
-      Math.max(Number(searchParams.get('limit')) || this.DEFAULT_LIMIT, 1),
-      this.MAX_LIMIT
-    )
+    const rawPage = searchParams.get('page')
+    const rawLimit = searchParams.get('limit')
+
+    // Validate and sanitize input
+    const page = this.sanitizeNumber(rawPage, this.DEFAULT_PAGE, this.MIN_PAGE)
+    const limit = this.sanitizeNumber(rawLimit, this.DEFAULT_LIMIT, 1, this.MAX_LIMIT)
 
     return { page, limit }
   }
 
   /**
-   * Generate pagination meta tags for SEO
-   * @param baseUrl Base URL of the page
-   * @param pagination PaginationResult object
-   * @returns Array of meta tag objects
+   * Sanitize numeric input
    */
-  public static generateMetaTags(
+  private sanitizeNumber(
+    value: string | null,
+    defaultValue: number,
+    min: number,
+    max?: number
+  ): number {
+    const num = Number(value)
+    if (isNaN(num)) return defaultValue
+    if (num < min) return min
+    if (max !== undefined && num > max) return max
+    return num
+  }
+
+  /**
+   * Generate pagination meta tags for SEO
+   */
+  public generateMetaTags(
     baseUrl: string,
     pagination: PaginationResult
   ): Array<{ property: string; content: string }> {
+    // Validate baseUrl
+    try {
+      new URL(baseUrl)
+    } catch {
+      throw new Error('Invalid base URL provided')
+    }
+
     const tags: Array<{ property: string; content: string }> = []
 
     if (pagination.hasPreviousPage) {
@@ -180,3 +172,6 @@ export class Pagination {
     return tags
   }
 }
+
+// Export a singleton instance
+export const pagination = PaginationService.getInstance()
